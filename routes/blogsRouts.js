@@ -3,7 +3,10 @@ const router = express.Router();
 const Blogs = require("../models/Blogs");
 const subscribers = require("../models/Subscribers");
 const Favblogs = require("../models/FavBlogs");
-
+const User = require("../models/Users");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+require('dotenv').config();
 router.post("/add-new-blog", async (req, res) => {
   try {
     const { title, content, author, selectedImage, UserId } = req.body;
@@ -89,6 +92,73 @@ router.post("/add-fav", async (req, res) => {
   }
 });
 
+
+/* --------------------------User management-------------------------- */
+
+const generateOTP = () => crypto.randomInt(100000, 999999).toString();
+
+const sendEmail = async (email, otp) => {
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+
+  await transporter.sendMail({
+    from: 'MindSpring httptechscript@gmail.com',
+    to: email,
+    subject: "Verify Your Account",
+    text: `Your OTP is: ${otp}`,
+  });
+};
+
+router.post("/signup", async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ message: "User already exists" });
+
+    const otp = generateOTP();
+
+    const user = new User({
+      email,
+      password,
+      name,
+      UserId: crypto.randomUUID(), // or use any random ID generator
+      otp,
+      otpExpires: Date.now() + 10 * 60 * 1000, // 10 minutes
+    });
+
+    await user.save();
+    await sendEmail(email, otp);
+
+    res.json({ message: "Signup successful. OTP sent to your email." });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+router.post("/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = await User.findOne({ email });
+
+  if (!user || user.otp !== otp || user.otpExpires < Date.now()) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
+
+  user.isVerified = true;
+  user.otp = null;
+  user.otpExpires = null;
+  await user.save();
+
+  res.json({ message: "Account verified successfully!" });
+});
 
 
 module.exports = router;
