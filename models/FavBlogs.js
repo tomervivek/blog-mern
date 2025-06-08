@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const favBlogsSchema =new mongoose.Schema({
     BlogId:String,
     UserId: String,
+    email: String,
     createdDate: {
       type: Date,
       default: Date.now,
